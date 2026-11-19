@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { toast } from "sonner";
+import { ShareDialog } from "@/components/editor/share-dialog";
 import { EditorToolbar } from "@/components/editor/toolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ type DocumentEditorProps = {
 
 export function DocumentEditor({ initial }: DocumentEditorProps) {
   const router = useRouter();
+  const isOwner = initial.role === "owner";
   const canEdit = initial.role === "owner" || initial.role === "editor";
   const [title, setTitle] = useState(initial.title);
   const [savedTitle, setSavedTitle] = useState(initial.title);
@@ -76,6 +78,17 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
           return;
         }
 
+        if (res.status === 403 || res.status === 404) {
+          dirtyRef.current = false;
+          setDirty(false);
+          toast.error(
+            data.error?.message ??
+              "You no longer have access to this document",
+          );
+          router.replace("/");
+          return;
+        }
+
         if (!res.ok || !data.document) {
           setSaveStatus("error");
           toast.error(data.error?.message ?? "Failed to save — retrying");
@@ -104,7 +117,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
         savingRef.current = false;
       }
     },
-    [canEdit, conflict, initial.id],
+    [canEdit, conflict, initial.id, router],
   );
 
   useEffect(() => {
@@ -229,6 +242,13 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
             aria-label="Document title"
             className="h-9 flex-1 border-transparent bg-transparent text-lg font-semibold shadow-none focus-visible:border-ring focus-visible:bg-background"
           />
+          {isOwner ? (
+            <ShareDialog documentId={initial.id} />
+          ) : (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              Owner: {initial.ownerName}
+            </span>
+          )}
           <span
             className="shrink-0 text-xs text-muted-foreground"
             aria-live="polite"

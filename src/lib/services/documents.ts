@@ -11,6 +11,7 @@ import {
   getAccess,
   type AccessRole,
 } from "@/lib/services/access";
+import { countSharesByDocument } from "@/lib/services/shares";
 
 export const MAX_CONTENT_BYTES = 1_000_000;
 
@@ -20,6 +21,8 @@ export type DocSummary = {
   updatedAt: string;
   ownerName: string;
   role: Exclude<AccessRole, "none">;
+  /** Present for owned docs: how many people the doc is shared with. */
+  sharedWithCount?: number;
 };
 
 export type DocumentDetail = {
@@ -70,12 +73,18 @@ export async function listDocuments(
     },
   });
 
+  const shareCounts = await countSharesByDocument(
+    ownedRows.map((row) => row.id),
+    db,
+  );
+
   const owned: DocSummary[] = ownedRows.map((row) => ({
     id: row.id,
     title: row.title,
     updatedAt: row.updatedAt,
     ownerName: row.ownerName,
     role: "owner" as const,
+    sharedWithCount: shareCounts.get(row.id) ?? 0,
   }));
 
   const shared: DocSummary[] = sharedRows

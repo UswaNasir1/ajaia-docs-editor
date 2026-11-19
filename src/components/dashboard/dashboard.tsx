@@ -196,6 +196,11 @@ export function Dashboard({
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span>Updated {formatRelativeTime(doc.updatedAt)}</span>
                 <Badge variant="secondary">{roleBadge(doc.role)}</Badge>
+                {doc.role === "owner" && (doc.sharedWithCount ?? 0) > 0 ? (
+                  <span>
+                    Shared with {doc.sharedWithCount}
+                  </span>
+                ) : null}
                 {doc.role !== "owner" ? (
                   <span>Owner: {doc.ownerName}</span>
                 ) : null}
