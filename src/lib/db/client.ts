@@ -14,7 +14,7 @@ function ensureLocalDataDir(url: string) {
   const filePath = url.replace(/^file:/, "");
   const absolute = path.isAbsolute(filePath)
     ? filePath
-    : path.resolve(process.cwd(), filePath);
+    : path.resolve(/* turbopackIgnore: true */ process.cwd(), filePath);
   fs.mkdirSync(path.dirname(absolute), { recursive: true });
 }
 
