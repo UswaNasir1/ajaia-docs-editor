@@ -6,35 +6,63 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { toast } from "sonner";
+import { ShareDialog } from "@/components/editor/share-dialog";
 import { EditorToolbar } from "@/components/editor/toolbar";
+import { SessionChangedDialog } from "@/components/session-changed-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useVisibilityPolling } from "@/hooks/use-visibility-polling";
+import { noStoreFetch } from "@/lib/fetch";
 import type { DocumentDetail } from "@/lib/services/documents";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 type DocumentEditorProps = {
+  sessionUserId: string;
+  sessionUserName: string;
   initial: DocumentDetail;
 };
 
-export function DocumentEditor({ initial }: DocumentEditorProps) {
+export function DocumentEditor({
+  sessionUserId,
+  sessionUserName,
+  initial,
+}: DocumentEditorProps) {
   const router = useRouter();
-  const canEdit = initial.role === "owner" || initial.role === "editor";
+  const rememberedUserId = useRef(sessionUserId);
+  const [role, setRole] = useState(initial.role);
+  const isOwner = role === "owner";
+  const canEdit = role === "owner" || role === "editor";
   const [title, setTitle] = useState(initial.title);
   const [savedTitle, setSavedTitle] = useState(initial.title);
   const [version, setVersion] = useState(initial.version);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [conflict, setConflict] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [sessionChangedName, setSessionChangedName] = useState<string | null>(
+    null,
+  );
 
   const versionRef = useRef(version);
   const dirtyRef = useRef(false);
   const titleRef = useRef(title);
+  const canEditRef = useRef(canEdit);
+  const roleRef = useRef(role);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
+  const pollingEnabledRef = useRef(true);
+  const requestIdRef = useRef(0);
   const persistRef = useRef<
     (payload: { title?: string; contentHtml?: string }) => Promise<void>
   >(async () => undefined);
+
+  const stopForSessionChange = useCallback((name?: string) => {
+    pollingEnabledRef.current = false;
+    dirtyRef.current = false;
+    setDirty(false);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSessionChangedName(name ?? "another user");
+  }, []);
 
   useEffect(() => {
     versionRef.current = version;
@@ -48,31 +76,135 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
     titleRef.current = title;
   }, [title]);
 
+  useEffect(() => {
+    canEditRef.current = canEdit;
+  }, [canEdit]);
+
+  useEffect(() => {
+    roleRef.current = role;
+  }, [role]);
+
+  const handleAccessLost = useCallback(
+    (message?: string) => {
+      dirtyRef.current = false;
+      setDirty(false);
+      toast.error(message ?? "You no longer have access to this document");
+      router.replace("/");
+    },
+    [router],
+  );
+
+  const checkAccess = useCallback(async () => {
+    if (!pollingEnabledRef.current) return;
+    const requestId = ++requestIdRef.current;
+    try {
+      const res = await fetch(`/api/documents/${initial.id}`, noStoreFetch);
+      if (requestId !== requestIdRef.current) return;
+
+      if (res.status === 401) {
+        pollingEnabledRef.current = false;
+        router.replace("/login");
+        return;
+      }
+      if (res.status === 403 || res.status === 404) {
+        const data = (await res.json()) as { error?: { message?: string } };
+        if (requestId !== requestIdRef.current) return;
+        handleAccessLost(data.error?.message);
+        return;
+      }
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        currentUserId?: string;
+        currentUserName?: string;
+        document?: DocumentDetail;
+      };
+      if (requestId !== requestIdRef.current) return;
+
+      if (
+        data.currentUserId &&
+        data.currentUserId !== rememberedUserId.current
+      ) {
+        stopForSessionChange(data.currentUserName);
+        return;
+      }
+
+      if (!data.document) return;
+
+      const nextRole = data.document.role;
+      if (nextRole !== roleRef.current) {
+        setRole(nextRole);
+        const nextCanEdit = nextRole === "owner" || nextRole === "editor";
+        if (!nextCanEdit && dirtyRef.current) {
+          dirtyRef.current = false;
+          setDirty(false);
+          if (saveTimer.current) clearTimeout(saveTimer.current);
+          toast.message("Your access is now view only");
+        } else if (nextCanEdit && roleRef.current === "viewer") {
+          toast.message("You can edit this document now");
+        }
+      }
+    } catch {
+      // Quiet background check — ignore transient network errors.
+    }
+  }, [handleAccessLost, initial.id, router, stopForSessionChange]);
+
+  useVisibilityPolling(checkAccess);
+
   const persist = useCallback(
     async (payload: { title?: string; contentHtml?: string }) => {
-      if (!canEdit || conflict || savingRef.current) return;
+      if (
+        !canEditRef.current ||
+        conflict ||
+        savingRef.current ||
+        !pollingEnabledRef.current
+      ) {
+        return;
+      }
       savingRef.current = true;
       setSaveStatus("saving");
       try {
         const res = await fetch(`/api/documents/${initial.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
+          ...noStoreFetch,
           body: JSON.stringify({
             ...payload,
             baseVersion: versionRef.current,
           }),
         });
         const data = (await res.json()) as {
+          currentUserId?: string;
+          currentUserName?: string;
           document?: DocumentDetail;
           version?: number;
           error?: { code?: string; message?: string };
         };
+
+        if (res.status === 401) {
+          pollingEnabledRef.current = false;
+          router.replace("/login");
+          return;
+        }
+
+        if (
+          data.currentUserId &&
+          data.currentUserId !== rememberedUserId.current
+        ) {
+          stopForSessionChange(data.currentUserName);
+          setSaveStatus("idle");
+          return;
+        }
 
         if (res.status === 409) {
           setConflict(true);
           setSaveStatus("error");
           dirtyRef.current = false;
           setDirty(false);
+          return;
+        }
+
+        if (res.status === 403 || res.status === 404) {
+          handleAccessLost(data.error?.message);
           return;
         }
 
@@ -104,7 +236,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
         savingRef.current = false;
       }
     },
-    [canEdit, conflict, initial.id],
+    [conflict, handleAccessLost, initial.id, router, stopForSessionChange],
   );
 
   useEffect(() => {
@@ -113,7 +245,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
 
   const scheduleContentSave = useCallback(
     (html: string) => {
-      if (!canEdit || conflict) return;
+      if (!canEditRef.current || conflict) return;
       dirtyRef.current = true;
       setDirty(true);
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -121,7 +253,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
         void persist({ contentHtml: html });
       }, 800);
     },
-    [canEdit, conflict, persist],
+    [conflict, persist],
   );
 
   const editor = useEditor({
@@ -143,7 +275,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
       scheduleContentSave(ed.getHTML());
     },
     onBlur: ({ editor: ed }) => {
-      if (!canEdit || conflict) return;
+      if (!canEditRef.current || conflict) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       if (dirtyRef.current) {
         void persist({ contentHtml: ed.getHTML() });
@@ -174,7 +306,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
   }, []);
 
   async function commitTitle() {
-    if (!canEdit || conflict) return;
+    if (!canEditRef.current || conflict) return;
     const next = titleRef.current.trim();
     if (!next || next === savedTitle) {
       setTitle(savedTitle);
@@ -198,6 +330,10 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[linear-gradient(180deg,#f6f4ef_0%,#faf9f7_40%,#ffffff_100%)]">
+      <SessionChangedDialog
+        open={!!sessionChangedName}
+        signedInAsName={sessionChangedName ?? sessionUserName}
+      />
       <header className="sticky top-0 z-10 border-b border-border/70 bg-background/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-4xl items-center gap-3 px-4 py-3">
           <Link
@@ -225,10 +361,17 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
                 (e.target as HTMLInputElement).blur();
               }
             }}
-            disabled={!canEdit || conflict}
+            disabled={!canEdit || conflict || !!sessionChangedName}
             aria-label="Document title"
             className="h-9 flex-1 border-transparent bg-transparent text-lg font-semibold shadow-none focus-visible:border-ring focus-visible:bg-background"
           />
+          {isOwner ? (
+            <ShareDialog documentId={initial.id} />
+          ) : (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              Owner: {initial.ownerName}
+            </span>
+          )}
           <span
             className="shrink-0 text-xs text-muted-foreground"
             aria-live="polite"
@@ -236,7 +379,9 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
             {statusLabel()}
           </span>
         </div>
-        {canEdit && !conflict ? <EditorToolbar editor={editor} /> : null}
+        {canEdit && !conflict && !sessionChangedName ? (
+          <EditorToolbar editor={editor} />
+        ) : null}
       </header>
 
       {!canEdit ? (

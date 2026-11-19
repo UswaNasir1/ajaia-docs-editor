@@ -23,8 +23,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // Extensions (e.g. Bitdefender) inject attrs like bis_skin_checked / bis_register
+      // before hydration; suppress known false-positive mismatches on the shell.
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body
+        className="min-h-full flex flex-col bg-background text-foreground"
+        suppressHydrationWarning
+      >
         {children}
         <Toaster />
       </body>

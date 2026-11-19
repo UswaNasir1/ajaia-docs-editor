@@ -70,13 +70,22 @@ async function upsertDocument(
     contentHtml: string;
   },
 ) {
-  const existing = await db.query.documents.findFirst({
+  const existingById = await db.query.documents.findFirst({
+    where: eq(documents.id, doc.id),
+  });
+  const existingByTitle = await db.query.documents.findFirst({
     where: and(eq(documents.ownerId, doc.ownerId), eq(documents.title, doc.title)),
   });
+  const existing = existingById ?? existingByTitle;
   if (existing) {
     await db
       .update(documents)
-      .set({ contentHtml: doc.contentHtml, updatedAt: new Date().toISOString() })
+      .set({
+        ownerId: doc.ownerId,
+        title: doc.title,
+        contentHtml: doc.contentHtml,
+        updatedAt: new Date().toISOString(),
+      })
       .where(eq(documents.id, existing.id));
     return existing.id;
   }

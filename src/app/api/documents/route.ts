@@ -9,8 +9,22 @@ export async function GET() {
     return errorResponse("UNAUTHORIZED", "Not signed in");
   }
 
+  // Lists are computed only from the session user (see listDocuments):
+  // owned  = documents.owner_id = sessionUser.id
+  // shared = document_shares.user_id = sessionUser.id AND owner_id != sessionUser.id
   const docs = await listDocuments(user.id);
-  return Response.json(docs);
+  return Response.json(
+    {
+      currentUserId: user.id,
+      currentUserName: user.name,
+      ...docs,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }
 
 export async function POST(request: Request) {

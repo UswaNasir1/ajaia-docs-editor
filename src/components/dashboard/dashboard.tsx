@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { SessionChangedDialog } from "@/components/session-changed-dialog";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,10 +25,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useVisibilityPolling } from "@/hooks/use-visibility-polling";
+import { noStoreFetch } from "@/lib/fetch";
 import { formatRelativeTime } from "@/lib/format";
 import type { DocSummary } from "@/lib/services/documents";
 
 type DashboardProps = {
+  userId: string;
   userName: string;
   userEmail: string;
   initialOwned: DocSummary[];
@@ -35,18 +39,22 @@ type DashboardProps = {
 };
 
 function roleBadge(role: DocSummary["role"]) {
-  if (role === "owner") return "Owner";
+  if (role === "owner") return "Owned by you";
   if (role === "editor") return "Shared · Editor";
   return "Shared · Viewer";
 }
 
 export function Dashboard({
+  userId,
   userName,
   userEmail,
   initialOwned,
   initialShared,
 }: DashboardProps) {
   const router = useRouter();
+  // Remembered session from first render — polls must match this.
+  const rememberedUserId = useRef(userId);
+  const [headerName, setHeaderName] = useState(userName);
   const [owned, setOwned] = useState<DocSummary[]>(initialOwned);
   const [shared, setShared] = useState<DocSummary[]>(initialShared);
   const [creating, setCreating] = useState(false);
@@ -54,24 +62,64 @@ export function Dashboard({
   const [renameValue, setRenameValue] = useState("");
   const [deleteDoc, setDeleteDoc] = useState<DocSummary | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [sessionChangedName, setSessionChangedName] = useState<string | null>(
+    null,
+  );
+  const pollingEnabledRef = useRef(true);
+  const requestIdRef = useRef(0);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/documents");
-      if (!res.ok) {
-        toast.error("Failed to load documents");
-        return;
+  const load = useCallback(
+    async (opts?: { quiet?: boolean }) => {
+      if (!pollingEnabledRef.current) return;
+      const requestId = ++requestIdRef.current;
+      try {
+        const res = await fetch("/api/documents", noStoreFetch);
+        if (requestId !== requestIdRef.current) return; // stale
+
+        if (res.status === 401) {
+          pollingEnabledRef.current = false;
+          router.replace("/login");
+          return;
+        }
+        if (!res.ok) {
+          if (!opts?.quiet) toast.error("Failed to load documents");
+          return;
+        }
+        const data = (await res.json()) as {
+          currentUserId?: string;
+          currentUserName?: string;
+          owned: DocSummary[];
+          shared: DocSummary[];
+        };
+        if (requestId !== requestIdRef.current) return; // stale
+
+        if (
+          data.currentUserId &&
+          data.currentUserId !== rememberedUserId.current
+        ) {
+          pollingEnabledRef.current = false;
+          setSessionChangedName(data.currentUserName ?? "another user");
+          return; // do not apply lists
+        }
+
+        // Same user — header and lists come from this response together
+        if (data.currentUserName) setHeaderName(data.currentUserName);
+        setOwned(data.owned);
+        setShared(data.shared);
+      } catch {
+        if (requestId !== requestIdRef.current) return;
+        if (!opts?.quiet) toast.error("Network error loading documents");
       }
-      const data = (await res.json()) as {
-        owned: DocSummary[];
-        shared: DocSummary[];
-      };
-      setOwned(data.owned);
-      setShared(data.shared);
-    } catch {
-      toast.error("Network error loading documents");
-    }
-  }, []);
+    },
+    [router],
+  );
+
+  const quietRefresh = useCallback(() => {
+    if (!pollingEnabledRef.current) return;
+    void load({ quiet: true });
+  }, [load]);
+
+  useVisibilityPolling(quietRefresh);
 
   async function createDocument() {
     setCreating(true);
@@ -106,11 +154,24 @@ export function Dashboard({
     }
     setBusyId(renameDoc.id);
     try {
-      const current = await fetch(`/api/documents/${renameDoc.id}`);
+      const current = await fetch(
+        `/api/documents/${renameDoc.id}`,
+        noStoreFetch,
+      );
       const currentData = (await current.json()) as {
+        currentUserId?: string;
+        currentUserName?: string;
         document?: { version: number };
         error?: { message?: string };
       };
+      if (
+        currentData.currentUserId &&
+        currentData.currentUserId !== rememberedUserId.current
+      ) {
+        pollingEnabledRef.current = false;
+        setSessionChangedName(currentData.currentUserName ?? "another user");
+        return;
+      }
       if (!current.ok || !currentData.document) {
         toast.error(currentData.error?.message ?? "Could not load document");
         return;
@@ -196,8 +257,14 @@ export function Dashboard({
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span>Updated {formatRelativeTime(doc.updatedAt)}</span>
                 <Badge variant="secondary">{roleBadge(doc.role)}</Badge>
+                {doc.role === "owner" && (doc.sharedWithCount ?? 0) > 0 ? (
+                  <span>
+                    Shared with {doc.sharedWithCount}{" "}
+                    {doc.sharedWithCount === 1 ? "person" : "people"}
+                  </span>
+                ) : null}
                 {doc.role !== "owner" ? (
-                  <span>Owner: {doc.ownerName}</span>
+                  <span>Owned by {doc.ownerName}</span>
                 ) : null}
               </div>
             </Link>
@@ -245,13 +312,13 @@ export function Dashboard({
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-sm text-muted-foreground">Signed in as</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{userName}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{headerName}</h1>
           <p className="text-sm text-muted-foreground">{userEmail}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
             onClick={() => void createDocument()}
-            disabled={creating}
+            disabled={creating || !!sessionChangedName}
             aria-label="New document"
           >
             <Plus className="size-4" />
@@ -273,6 +340,11 @@ export function Dashboard({
           {renderList(shared, false)}
         </TabsContent>
       </Tabs>
+
+      <SessionChangedDialog
+        open={!!sessionChangedName}
+        signedInAsName={sessionChangedName ?? ""}
+      />
 
       <Dialog
         open={!!renameDoc}

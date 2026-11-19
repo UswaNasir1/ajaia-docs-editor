@@ -16,6 +16,8 @@ export default async function DashboardPage() {
 
   return (
     <Dashboard
+      key={user.id}
+      userId={user.id}
       userName={user.name}
       userEmail={user.email}
       initialOwned={docs.owned}

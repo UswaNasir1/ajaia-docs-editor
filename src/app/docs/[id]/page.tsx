@@ -21,5 +21,12 @@ export default async function DocumentPage({ params }: PageProps) {
     notFound();
   }
 
-  return <DocumentEditor initial={document} />;
+  return (
+    <DocumentEditor
+      key={`${user.id}:${document.id}`}
+      sessionUserId={user.id}
+      sessionUserName={user.name}
+      initial={document}
+    />
+  );
 }
