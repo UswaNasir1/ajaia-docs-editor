@@ -45,4 +45,4 @@ Password for all: `demo1234`
 
 ## Stack
 
-Next.js App Router, TypeScript, Tailwind, shadcn/ui, TipTap (coming next), libSQL + Drizzle, zod, bcryptjs + jose.
+Next.js App Router, TypeScript, Tailwind, shadcn/ui, TipTap, libSQL + Drizzle, zod, bcryptjs + jose, sanitize-html.

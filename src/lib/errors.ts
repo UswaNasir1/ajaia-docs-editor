@@ -19,13 +19,28 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   INTERNAL: 500,
 };
 
+export class AppError extends Error {
+  constructor(
+    public readonly code: ErrorCode,
+    message: string,
+    public readonly extra?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "AppError";
+  }
+}
+
 export function errorResponse(
   code: ErrorCode,
   message: string,
-  status?: number,
+  options?: { status?: number; body?: Record<string, unknown> },
 ) {
   return Response.json(
-    { error: { code, message } },
-    { status: status ?? STATUS_BY_CODE[code] },
+    { error: { code, message }, ...(options?.body ?? {}) },
+    { status: options?.status ?? STATUS_BY_CODE[code] },
   );
+}
+
+export function appErrorResponse(err: AppError) {
+  return errorResponse(err.code, err.message, { body: err.extra });
 }

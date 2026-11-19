@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
-import { SignOutButton } from "@/components/sign-out-button";
+import { Dashboard } from "@/components/dashboard/dashboard";
 import { getSessionUser } from "@/lib/auth/session";
+import { listDocuments } from "@/lib/services/documents";
+
+// Auth + DB reads are per-request; allow blocking navigation for this route.
+export const instant = false;
 
 export default async function DashboardPage() {
   const user = await getSessionUser();
@@ -8,23 +12,14 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
-      <header className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-muted-foreground">Signed in as</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{user.name}</h1>
-          <p className="text-sm text-muted-foreground">{user.email}</p>
-        </div>
-        <SignOutButton />
-      </header>
+  const docs = await listDocuments(user.id);
 
-      <section className="rounded-lg border border-border p-4">
-        <h2 className="font-medium">Dashboard</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Document list placeholder — owned and shared docs come next.
-        </p>
-      </section>
-    </main>
+  return (
+    <Dashboard
+      userName={user.name}
+      userEmail={user.email}
+      initialOwned={docs.owned}
+      initialShared={docs.shared}
+    />
   );
 }
