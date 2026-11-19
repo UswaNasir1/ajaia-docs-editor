@@ -11,6 +11,12 @@ let db: Db | null = null;
 
 function ensureLocalDataDir(url: string) {
   if (!url.startsWith("file:")) return;
+  // Vercel serverless FS is ephemeral — require Turso in production.
+  if (process.env.VERCEL) {
+    throw new Error(
+      "DATABASE_URL must be a Turso libsql:// URL on Vercel (file: SQLite is not durable).",
+    );
+  }
   const filePath = url.replace(/^file:/, "");
   const absolute = path.isAbsolute(filePath)
     ? filePath

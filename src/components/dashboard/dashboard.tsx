@@ -36,7 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling";
 import { noStoreFetch } from "@/lib/fetch";
-import { formatRelativeTime } from "@/lib/format";
+import { RelativeTime } from "@/components/relative-time";
 import type { DocSummary } from "@/lib/services/documents";
 import { cn } from "@/lib/utils";
 
@@ -279,7 +279,7 @@ export function Dashboard({
                   {doc.title}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--ajaia-muted)]">
-                  <span>Edited {formatRelativeTime(doc.updatedAt)}</span>
+                  <RelativeTime iso={doc.updatedAt} prefix="Edited " />
                   {isOwner ? (
                     sharedCount > 0 ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-[var(--ajaia-canvas)] px-2 py-0.5 ring-1 ring-[#E5E7EB]">
