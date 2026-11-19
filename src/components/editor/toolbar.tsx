@@ -78,7 +78,7 @@ export function EditorToolbar({ editor, disabled }: ToolbarProps) {
     >
       <ToolButton
         label="Bold"
-        shortcut="Ctrl+B"
+        shortcut="Cmd/Ctrl+B"
         active={editor.isActive("bold")}
         disabled={disabled}
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -87,7 +87,7 @@ export function EditorToolbar({ editor, disabled }: ToolbarProps) {
       </ToolButton>
       <ToolButton
         label="Italic"
-        shortcut="Ctrl+I"
+        shortcut="Cmd/Ctrl+I"
         active={editor.isActive("italic")}
         disabled={disabled}
         onClick={() => editor.chain().focus().toggleItalic().run()}
@@ -96,7 +96,7 @@ export function EditorToolbar({ editor, disabled }: ToolbarProps) {
       </ToolButton>
       <ToolButton
         label="Underline"
-        shortcut="Ctrl+U"
+        shortcut="Cmd/Ctrl+U"
         active={editor.isActive("underline")}
         disabled={disabled}
         onClick={() => editor.chain().focus().toggleUnderline().run()}

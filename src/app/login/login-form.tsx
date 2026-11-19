@@ -4,8 +4,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { publishAuthUser } from "@/lib/auth/session-sync";
-
 const DEMO_USERS = [
   { label: "Alice", email: "alice@ajaia.test" },
   { label: "Bob", email: "bob@ajaia.test" },
@@ -38,7 +36,6 @@ export function LoginForm() {
         setError(data.error?.message ?? "Unable to sign in");
         return;
       }
-      publishAuthUser(data.user?.id ?? null);
       router.replace("/");
       router.refresh();
     } catch {

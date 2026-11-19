@@ -310,8 +310,8 @@ export function Dashboard({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
-      <header className="flex flex-wrap items-center justify-between gap-4">
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:py-10">
+      <header className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div>
           <p className="text-sm text-muted-foreground">Signed in as</p>
           <h1 className="text-2xl font-semibold tracking-tight">{headerName}</h1>

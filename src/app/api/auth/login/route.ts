@@ -4,9 +4,10 @@ import {
   SESSION_COOKIE,
   sessionCookieOptions,
 } from "@/lib/auth/session";
-import { errorResponse } from "@/lib/errors";
+import { errorResponse, internalErrorResponse } from "@/lib/errors";
 import { authenticateUser } from "@/lib/services/auth";
 import { loginSchema } from "@/lib/validation/auth";
+import { zodFieldMessage } from "@/lib/validation/zod";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -18,17 +19,24 @@ export async function POST(request: Request) {
 
   const parsed = loginSchema.safeParse(body);
   if (!parsed.success) {
-    return errorResponse("BAD_REQUEST", "Email and password are required");
+    return errorResponse(
+      "BAD_REQUEST",
+      zodFieldMessage(parsed.error, "Email and password are required"),
+    );
   }
 
-  const email = parsed.data.email.trim().toLowerCase();
-  const user = await authenticateUser(email, parsed.data.password);
-  if (!user) {
-    return errorResponse("UNAUTHORIZED", "Invalid email or password");
-  }
+  try {
+    const email = parsed.data.email.trim().toLowerCase();
+    const user = await authenticateUser(email, parsed.data.password);
+    if (!user) {
+      return errorResponse("UNAUTHORIZED", "Invalid email or password");
+    }
 
-  const token = await createSessionToken(user);
-  const response = NextResponse.json({ user });
-  response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
-  return response;
+    const token = await createSessionToken(user);
+    const response = NextResponse.json({ user });
+    response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+    return response;
+  } catch {
+    return internalErrorResponse();
+  }
 }

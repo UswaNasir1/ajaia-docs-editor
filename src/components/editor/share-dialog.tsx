@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ type ShareDialogProps = {
 };
 
 export function ShareDialog({ documentId }: ShareDialogProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"viewer" | "editor">("viewer");
@@ -33,6 +35,10 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
     setError(null);
     try {
       const res = await fetch(`/api/documents/${documentId}/shares`);
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
       const data = (await res.json()) as SharesResponse & {
         error?: { message?: string };
       };
@@ -47,7 +53,7 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
     } finally {
       setLoading(false);
     }
-  }, [documentId]);
+  }, [documentId, router]);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -68,6 +74,10 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), role }),
       });
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
       const data = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) {
         setError(data.error?.message ?? "Could not share document");
@@ -94,6 +104,10 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
           body: JSON.stringify({ role: nextRole }),
         },
       );
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
       const data = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) {
         toast.error(data.error?.message ?? "Could not update role");
@@ -115,6 +129,10 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
         `/api/documents/${documentId}/shares/${userId}`,
         { method: "DELETE" },
       );
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
       const data = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) {
         toast.error(data.error?.message ?? "Could not remove access");

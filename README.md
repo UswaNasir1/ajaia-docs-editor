@@ -54,3 +54,12 @@ Next.js App Router, TypeScript, Tailwind, shadcn/ui, TipTap, libSQL + Drizzle, z
 ## File import
 
 Dashboard **Import file** accepts `.txt`, `.md`, and `.docx` up to **2 MB**. The upload becomes a new document owned by you; HTML is sanitized server-side.
+
+## What the tests cover
+
+Vitest runs against an isolated temp libSQL database per test (see `src/lib/test/db.ts`). Coverage includes:
+
+- Document list isolation and seed-title owned/shared regression (Alice / Bob / Carol)
+- Access matrix and share add/update/revoke behavior
+- File import converters (txt / md / docx), sanitizer stripping of scripts/`onerror`, and 400/413/415 validation
+- `noStoreFetch` helper used by polling clients

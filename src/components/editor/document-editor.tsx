@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { toast } from "sonner";
 import { ShareDialog } from "@/components/editor/share-dialog";
@@ -52,8 +52,13 @@ export function DocumentEditor({
   const savingRef = useRef(false);
   const pollingEnabledRef = useRef(true);
   const requestIdRef = useRef(0);
+  const lastSavedHtmlRef = useRef(initial.contentHtml || "<p></p>");
+  const editorRef = useRef<Editor | null>(null);
   const persistRef = useRef<
-    (payload: { title?: string; contentHtml?: string }) => Promise<void>
+    (
+      payload: { title?: string; contentHtml?: string },
+      opts?: { keepalive?: boolean },
+    ) => Promise<void>
   >(async () => undefined);
 
   const stopForSessionChange = useCallback((name?: string) => {
@@ -151,7 +156,10 @@ export function DocumentEditor({
   useVisibilityPolling(checkAccess);
 
   const persist = useCallback(
-    async (payload: { title?: string; contentHtml?: string }) => {
+    async (
+      payload: { title?: string; contentHtml?: string },
+      opts?: { keepalive?: boolean },
+    ) => {
       if (
         !canEditRef.current ||
         conflict ||
@@ -160,6 +168,18 @@ export function DocumentEditor({
       ) {
         return;
       }
+
+      // Skip no-op content saves (autosave must not fire when nothing changed).
+      if (
+        payload.contentHtml !== undefined &&
+        payload.title === undefined &&
+        payload.contentHtml === lastSavedHtmlRef.current
+      ) {
+        dirtyRef.current = false;
+        setDirty(false);
+        return;
+      }
+
       savingRef.current = true;
       setSaveStatus("saving");
       try {
@@ -167,6 +187,7 @@ export function DocumentEditor({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           ...noStoreFetch,
+          keepalive: opts?.keepalive,
           body: JSON.stringify({
             ...payload,
             baseVersion: versionRef.current,
@@ -223,6 +244,9 @@ export function DocumentEditor({
           setSavedTitle(data.document.title);
           setTitle(data.document.title);
         }
+        if (payload.contentHtml !== undefined) {
+          lastSavedHtmlRef.current = payload.contentHtml;
+        }
         dirtyRef.current = false;
         setDirty(false);
         setSaveStatus("saved");
@@ -246,6 +270,12 @@ export function DocumentEditor({
   const scheduleContentSave = useCallback(
     (html: string) => {
       if (!canEditRef.current || conflict) return;
+      if (html === lastSavedHtmlRef.current) {
+        dirtyRef.current = false;
+        setDirty(false);
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        return;
+      }
       dirtyRef.current = true;
       setDirty(true);
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -260,6 +290,7 @@ export function DocumentEditor({
     immediatelyRender: false,
     editable: canEdit && !conflict,
     extensions: [
+      // Underline comes from StarterKit in TipTap v3 — do not register twice.
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
       }),
@@ -284,24 +315,41 @@ export function DocumentEditor({
   });
 
   useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  useEffect(() => {
     if (!editor) return;
     editor.setEditable(canEdit && !conflict);
   }, [editor, canEdit, conflict]);
 
   useEffect(() => {
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirtyRef.current) {
-        e.preventDefault();
-        e.returnValue = "";
+    function flushPending(keepalive: boolean) {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
       }
+      const ed = editorRef.current;
+      if (!ed || !dirtyRef.current || !canEditRef.current) return;
+      const html = ed.getHTML();
+      if (html === lastSavedHtmlRef.current) {
+        dirtyRef.current = false;
+        return;
+      }
+      void persistRef.current({ contentHtml: html }, { keepalive });
+    }
+
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      flushPending(true);
+      e.preventDefault();
+      e.returnValue = "";
     };
     window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
-
-  useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      // Client-side navigation away from the editor.
+      flushPending(true);
     };
   }, []);
 
@@ -346,9 +394,11 @@ export function DocumentEditor({
           <Input
             value={title}
             onChange={(e) => {
-              setTitle(e.target.value);
-              dirtyRef.current = true;
-              setDirty(true);
+              const next = e.target.value;
+              setTitle(next);
+              const changed = next.trim() !== savedTitle;
+              dirtyRef.current = changed;
+              setDirty(changed);
             }}
             onBlur={() => void commitTitle()}
             onKeyDown={(e) => {
