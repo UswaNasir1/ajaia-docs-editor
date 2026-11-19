@@ -4,7 +4,6 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getDocument } from "@/lib/services/documents";
 
 export const instant = false;
-export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -22,5 +21,12 @@ export default async function DocumentPage({ params }: PageProps) {
     notFound();
   }
 
-  return <DocumentEditor initial={document} />;
+  return (
+    <DocumentEditor
+      key={`${user.id}:${document.id}`}
+      sessionUserId={user.id}
+      sessionUserName={user.name}
+      initial={document}
+    />
+  );
 }

@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getDb, type Db } from "@/lib/db/client";
 import { documentShares, documents, users } from "@/lib/db/schema";
@@ -62,22 +62,32 @@ export async function listDocuments(
     .where(eq(documents.ownerId, userId))
     .orderBy(desc(documents.updatedAt));
 
-  const sharedRows = await db.query.documentShares.findMany({
-    where: eq(documentShares.userId, userId),
-    with: {
-      document: {
-        with: {
-          owner: true,
-        },
-      },
-    },
-  });
+  // shared = shares for this user where they are not the owner
+  const sharedRows = await db
+    .select({
+      id: documents.id,
+      title: documents.title,
+      updatedAt: documents.updatedAt,
+      ownerName: users.name,
+      role: documentShares.role,
+    })
+    .from(documentShares)
+    .innerJoin(documents, eq(documentShares.documentId, documents.id))
+    .innerJoin(users, eq(documents.ownerId, users.id))
+    .where(
+      and(
+        eq(documentShares.userId, userId),
+        ne(documents.ownerId, userId),
+      ),
+    )
+    .orderBy(desc(documents.updatedAt));
 
   const shareCounts = await countSharesByDocument(
     ownedRows.map((row) => row.id),
     db,
   );
 
+  // Client must render these arrays as-is (no client-side reclassification).
   const owned: DocSummary[] = ownedRows.map((row) => ({
     id: row.id,
     title: row.title,
@@ -87,16 +97,13 @@ export async function listDocuments(
     sharedWithCount: shareCounts.get(row.id) ?? 0,
   }));
 
-  const shared: DocSummary[] = sharedRows
-    .filter((row) => row.document.ownerId !== userId)
-    .map((row) => ({
-      id: row.document.id,
-      title: row.document.title,
-      updatedAt: row.document.updatedAt,
-      ownerName: row.document.owner.name,
-      role: row.role,
-    }))
-    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  const shared: DocSummary[] = sharedRows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    updatedAt: row.updatedAt,
+    ownerName: row.ownerName,
+    role: row.role,
+  }));
 
   return { owned, shared };
 }

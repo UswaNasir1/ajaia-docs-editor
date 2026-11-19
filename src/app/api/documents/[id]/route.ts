@@ -7,8 +7,6 @@ import {
 } from "@/lib/services/documents";
 import { updateDocumentSchema } from "@/lib/validation/documents";
 
-export const dynamic = "force-dynamic";
-
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -23,7 +21,11 @@ export async function GET(_request: Request, context: RouteContext) {
     return errorResponse("NOT_FOUND", "Document not found");
   }
   return Response.json(
-    { document: doc },
+    {
+      currentUserId: user.id,
+      currentUserName: user.name,
+      document: doc,
+    },
     {
       headers: {
         "Cache-Control": "no-store",
@@ -56,7 +58,11 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
     const document = await updateDocument(user.id, id, parsed.data);
-    return Response.json({ document });
+    return Response.json({
+      currentUserId: user.id,
+      currentUserName: user.name,
+      document,
+    });
   } catch (err) {
     if (err instanceof AppError) return appErrorResponse(err);
     throw err;

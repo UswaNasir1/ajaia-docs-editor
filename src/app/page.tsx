@@ -5,7 +5,6 @@ import { listDocuments } from "@/lib/services/documents";
 
 // Auth + DB reads are per-request; allow blocking navigation for this route.
 export const instant = false;
-export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await getSessionUser();
@@ -17,6 +16,8 @@ export default async function DashboardPage() {
 
   return (
     <Dashboard
+      key={user.id}
+      userId={user.id}
       userName={user.name}
       userEmail={user.email}
       initialOwned={docs.owned}

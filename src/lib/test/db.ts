@@ -79,3 +79,69 @@ export async function seedAccessFixture(db: Db) {
     },
   ]);
 }
+
+/** Matches the product seed titles/shares used for list regression tests. */
+export async function seedDemoListsFixture(db: Db) {
+  await db.insert(users).values([
+    {
+      id: "user_alice",
+      email: "alice@ajaia.test",
+      name: "Alice",
+      passwordHash: "x",
+    },
+    {
+      id: "user_bob",
+      email: "bob@ajaia.test",
+      name: "Bob",
+      passwordHash: "x",
+    },
+    {
+      id: "user_carol",
+      email: "carol@ajaia.test",
+      name: "Carol",
+      passwordHash: "x",
+    },
+  ]);
+
+  await db.insert(documents).values([
+    {
+      id: "doc_welcome",
+      ownerId: "user_alice",
+      title: "Welcome to Ajaia Docs",
+      contentHtml: "<p>welcome</p>",
+      version: 1,
+    },
+    {
+      id: "doc_alice_notes",
+      ownerId: "user_alice",
+      title: "Alice private notes",
+      contentHtml: "<p>notes</p>",
+      version: 1,
+    },
+    {
+      id: "doc_bob_checklist",
+      ownerId: "user_bob",
+      title: "Bob's launch checklist",
+      contentHtml: "<p>checklist</p>",
+      version: 1,
+    },
+  ]);
+
+  await db.insert(documentShares).values([
+    {
+      documentId: "doc_welcome",
+      userId: "user_bob",
+      role: "editor",
+    },
+    {
+      documentId: "doc_welcome",
+      userId: "user_carol",
+      role: "viewer",
+    },
+    {
+      documentId: "doc_bob_checklist",
+      userId: "user_alice",
+      role: "editor",
+    },
+  ]);
+}

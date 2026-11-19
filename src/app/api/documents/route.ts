@@ -3,20 +3,28 @@ import { AppError, appErrorResponse, errorResponse } from "@/lib/errors";
 import { createDocument, listDocuments } from "@/lib/services/documents";
 import { createDocumentSchema } from "@/lib/validation/documents";
 
-export const dynamic = "force-dynamic";
-
 export async function GET() {
   const user = await getSessionUser();
   if (!user) {
     return errorResponse("UNAUTHORIZED", "Not signed in");
   }
 
+  // Lists are computed only from the session user (see listDocuments):
+  // owned  = documents.owner_id = sessionUser.id
+  // shared = document_shares.user_id = sessionUser.id AND owner_id != sessionUser.id
   const docs = await listDocuments(user.id);
-  return Response.json(docs, {
-    headers: {
-      "Cache-Control": "no-store",
+  return Response.json(
+    {
+      currentUserId: user.id,
+      currentUserName: user.name,
+      ...docs,
     },
-  });
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }
 
 export async function POST(request: Request) {
