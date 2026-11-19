@@ -8,9 +8,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  /* Was circular (`var(--font-sans)` → itself); bind to next/font Inter. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -50,24 +51,49 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* Ajaia design tokens (visual revamp) */
+  --ajaia-canvas: #fafafa;
+  --ajaia-page: #f3f4f6;
+  --ajaia-surface: #ffffff;
+  --ajaia-ink: #111827;
+  --ajaia-muted: #6b7280;
+  --ajaia-accent: #4f46e5;
+  --ajaia-accent-hover: #4338ca;
+  --ajaia-accent-soft: #eef2ff;
+  --ajaia-accent-ring: #c7d2fe;
+  --ajaia-editor-viewer: #047857;
+  --ajaia-editor-viewer-soft: #ecfdf5;
+  --ajaia-viewer-amber: #b45309;
+  --ajaia-viewer-amber-soft: #fffbeb;
+  --ajaia-radius: 10px;
+  --ajaia-success: #15803d;
+  --ajaia-success-soft: #dcfce7;
+  --ajaia-danger: #b91c1c;
+  --ajaia-danger-soft: #fee2e2;
+  --ajaia-amber: #92400e;
+  --ajaia-amber-soft: #fffbeb;
+  --ajaia-amber-border: #fde68a;
+  --ajaia-paper-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 8px 24px rgb(15 23 42 / 6%);
+  --ajaia-dialog-radius: 14px;
+
+  --background: #ffffff;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #111827;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #eef2ff;
+  --accent-foreground: #3730a3;
+  --destructive: #b91c1c;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #4f46e5;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -128,4 +154,157 @@
   html {
     @apply font-sans;
   }
+}
+
+/* TipTap document paper typography (preflight resets lists/headings) */
+.ajaia-editor .ProseMirror {
+  outline: none;
+  min-height: 100%;
+  font-size: 16.5px;
+  line-height: 1.7;
+  color: var(--ajaia-ink);
+}
+.ajaia-editor .ProseMirror > * + * {
+  margin-top: 0.75em;
+}
+.ajaia-editor .ProseMirror p {
+  margin: 0.75em 0;
+}
+.ajaia-editor .ProseMirror h1 {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1.1em 0 0.5em;
+  color: var(--ajaia-ink);
+}
+.ajaia-editor .ProseMirror h2 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1em 0 0.45em;
+}
+.ajaia-editor .ProseMirror h3 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0.9em 0 0.4em;
+}
+.ajaia-editor .ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.75em 0;
+}
+.ajaia-editor .ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin: 0.75em 0;
+}
+.ajaia-editor .ProseMirror li {
+  margin: 0.25em 0;
+}
+.ajaia-editor .ProseMirror li > ul,
+.ajaia-editor .ProseMirror li > ol {
+  margin: 0.25em 0;
+}
+.ajaia-editor .ProseMirror ul ul {
+  list-style-type: circle;
+}
+.ajaia-editor .ProseMirror ul ul ul {
+  list-style-type: square;
+}
+.ajaia-editor .ProseMirror strong {
+  font-weight: 700;
+}
+.ajaia-editor .ProseMirror em {
+  font-style: italic;
+}
+.ajaia-editor .ProseMirror u {
+  text-decoration: underline;
+}
+.ajaia-editor .ProseMirror s {
+  text-decoration: line-through;
+}
+.ajaia-editor .ProseMirror blockquote {
+  border-left: 3px solid var(--ajaia-accent-ring);
+  margin: 0.9em 0;
+  padding: 0.15em 0 0.15em 1rem;
+  color: var(--ajaia-muted);
+}
+.ajaia-editor .ProseMirror code {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.9em;
+  background: #f3f4f6;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.ajaia-editor .ProseMirror pre {
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.9em;
+}
+.ajaia-editor .ProseMirror pre code {
+  background: transparent;
+  padding: 0;
+}
+.ajaia-editor .ProseMirror hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 1.25em 0;
+}
+.ajaia-editor .ProseMirror a {
+  color: var(--ajaia-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ajaia-editor .ProseMirror ::selection {
+  background: var(--ajaia-accent-soft);
+}
+.ajaia-editor .ProseMirror.is-editor-empty::before {
+  content: "Start typing…";
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: #9ca3af;
+}
+.ajaia-editor.is-readonly .ProseMirror {
+  caret-color: transparent;
+}
+.ajaia-toolbar-btn {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #374151;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.ajaia-toolbar-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+.ajaia-toolbar-btn:focus-visible {
+  outline: 2px solid var(--ajaia-accent);
+  outline-offset: 2px;
+}
+.ajaia-toolbar-btn[aria-pressed="true"],
+.ajaia-toolbar-btn[data-active="true"] {
+  background: var(--ajaia-accent-soft);
+  color: var(--ajaia-accent);
+}
+.ajaia-toolbar-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Sonner toast surface */
+[data-sonner-toaster] [data-sonner-toast] {
+  background: #fff !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 8%) !important;
+  color: var(--ajaia-ink) !important;
 }

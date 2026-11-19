@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,12 +27,20 @@ export function SessionChangedDialog({
         // Blocking — only Reload can dismiss via full reload.
       }}
     >
-      <DialogContent showCloseButton={false}>
+      <DialogContent showCloseButton={false} className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Session changed</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="inline-flex size-8 items-center justify-center rounded-full bg-[var(--ajaia-amber-soft)] text-[var(--ajaia-amber)]">
+              <AlertTriangle className="size-4" aria-hidden />
+            </span>
+            Session changed
+          </DialogTitle>
           <DialogDescription>
             Your session changed in another tab (now signed in as{" "}
-            {signedInAsName}). Reload to continue.
+            <span className="font-medium text-[var(--ajaia-ink)]">
+              {signedInAsName}
+            </span>
+            ). Reload to continue.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

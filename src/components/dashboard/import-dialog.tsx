@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Upload } from "lucide-react";
+import { FileUp, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,11 +13,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 type ImportDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
+
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
 
 export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
   const router = useRouter();
@@ -25,9 +32,11 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
   const [dragging, setDragging] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<File | null>(null);
 
   const upload = useCallback(
     async (file: File) => {
+      setChosen(file);
       setPending(true);
       setError(null);
       try {
@@ -52,6 +61,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
           toast.message(warning);
         }
         onOpenChange(false);
+        setChosen(null);
         router.push(`/docs/${data.id}`);
       } catch {
         setError("Network error importing file");
@@ -69,13 +79,22 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          setError(null);
+          setChosen(null);
+          setDragging(false);
+        }
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Import file</DialogTitle>
           <DialogDescription>
-            Upload a .txt, .md, or .docx file (max 2 MB). It becomes a new
-            editable document.
+            Upload a file to create a new editable document.
           </DialogDescription>
         </DialogHeader>
 
@@ -96,11 +115,13 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
           type="button"
           disabled={pending}
           aria-label="Drop a file here or choose a file"
-          className={`flex min-h-36 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-8 text-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          className={cn(
+            "flex min-h-40 w-full flex-col items-center justify-center gap-3 rounded-[12px] border-2 border-dashed px-4 py-8 text-center outline-none transition-colors duration-150",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ajaia-accent)]",
             dragging
-              ? "border-foreground bg-muted/60"
-              : "border-border hover:bg-muted/40"
-          }`}
+              ? "border-[var(--ajaia-accent)] bg-[var(--ajaia-accent-soft)]"
+              : "border-border bg-[var(--ajaia-page)] hover:border-[var(--ajaia-accent-ring)] hover:bg-[var(--ajaia-accent-soft)]/50",
+          )}
           onClick={() => inputRef.current?.click()}
           onDragEnter={(e) => {
             e.preventDefault();
@@ -120,19 +141,45 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
             takeFile(e.dataTransfer.files);
           }}
         >
-          <Upload className="size-6 text-muted-foreground" aria-hidden />
-          <span className="text-sm font-medium">
-            {pending
-              ? "Importing…"
-              : "Drag and drop a file here, or click to browse"}
+          {pending ? (
+            <Loader2
+              className="size-8 animate-spin text-[var(--ajaia-accent)]"
+              aria-hidden
+            />
+          ) : (
+            <Upload
+              className="size-8 text-[var(--ajaia-accent)]"
+              aria-hidden
+            />
+          )}
+          <span className="text-sm font-medium text-[var(--ajaia-ink)]">
+            {pending ? "Importing…" : "Drag a file here or browse"}
           </span>
-          <span className="text-xs text-muted-foreground">
-            Supported: .txt, .md, .docx · Max 2 MB
+          <span className="flex flex-wrap items-center justify-center gap-1.5">
+            {[".txt", ".md", ".docx"].map((ext) => (
+              <span
+                key={ext}
+                className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-[var(--ajaia-muted)] ring-1 ring-border"
+              >
+                {ext}
+              </span>
+            ))}
+            <span className="text-[11px] text-muted-foreground">Max 2 MB</span>
           </span>
         </button>
 
+        {chosen ? (
+          <p className="flex items-center gap-2 text-sm text-[var(--ajaia-ink)]">
+            <FileUp className="size-4 text-[var(--ajaia-accent)]" aria-hidden />
+            <span className="min-w-0 truncate font-medium">{chosen.name}</span>
+            <span className="shrink-0 text-muted-foreground">
+              {formatBytes(chosen.size)}
+            </span>
+          </p>
+        ) : null}
+
         {error ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="text-sm text-[var(--ajaia-danger)]" role="alert">
             {error}
           </p>
         ) : null}
@@ -152,7 +199,14 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
             disabled={pending}
             aria-label="Choose file"
           >
-            {pending ? "Importing…" : "Choose file"}
+            {pending ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                Importing…
+              </>
+            ) : (
+              "Choose file"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
