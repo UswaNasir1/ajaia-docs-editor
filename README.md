@@ -1,8 +1,24 @@
 # Ajaia Docs
 
-Lightweight collaborative document editor (take-home assignment).
+Lightweight collaborative document editor for a take-home assignment.
+Sign in with seeded demo users, create or import rich-text documents, autosave edits, and share with viewer/editor roles.
+Dashboard splits **Owned by me** and **Shared with me**.
+
+**Live URL:** https://ajaia-docs-editor-76es069p5-uswa13.vercel.app/
+
+## Demo accounts
+
+Password for all: `demo1234`
+
+| Email | Name | Seeded role in the demo scenario |
+|---|---|---|
+| `alice@ajaia.test` | Alice | Owns **Welcome to Ajaia Docs** (Bob = editor, Carol = viewer) and **Alice private notes** (unshared). Editor on Bob’s checklist. |
+| `bob@ajaia.test` | Bob | Owns **Bob's launch checklist** (shared with Alice as editor). Editor on Welcome. |
+| `carol@ajaia.test` | Carol | Viewer on Welcome. |
 
 ## Local setup
+
+Requires **Node.js 20+** (developed on Node 24).
 
 ```bash
 cp .env.example .env
@@ -17,24 +33,16 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | Default `file:./data/local.db`. Use a Turso `libsql://` URL in production. |
-| `DATABASE_AUTH_TOKEN` | Optional. Required for Turso; leave empty for local file DB. |
-| `SESSION_SECRET` | Long random string for signing session JWTs. |
-
-### Demo accounts
-
-Password for all: `demo1234`
-
-- `alice@ajaia.test` (Alice)
-- `bob@ajaia.test` (Bob)
-- `carol@ajaia.test` (Carol)
+| `DATABASE_URL` | Default `file:./data/local.db`. Use a Turso `libsql://…` URL in production. |
+| `DATABASE_AUTH_TOKEN` | Required for Turso; leave empty for local file DB. |
+| `SESSION_SECRET` | Long random string for signing session JWTs (`openssl rand -base64 32`). |
 
 ## Scripts
 
 | Script | What it does |
 |---|---|
 | `npm run dev` | Start Next.js dev server |
-| `npm run setup` | Run migrations + seed |
+| `npm run setup` | Migrate + seed |
 | `npm run db:migrate` | Apply Drizzle migrations (local file or Turso) |
 | `npm run db:seed` | Idempotent demo data seed |
 | `npm run check` | typecheck + lint + test |
@@ -43,23 +51,48 @@ Password for all: `demo1234`
 | `npm run lint` | ESLint |
 | `npm run build` / `start` | Production build and server |
 
+## File import
+
+Dashboard **Import file** accepts `.txt`, `.md`, and `.docx` up to **2 MB**.
+Each upload becomes a new document you own; HTML is sanitized server-side before save.
+Unsupported types → 415; oversized → 413.
+
+## Tests
+
+```bash
+npm run check
+```
+
+Vitest uses an isolated temp libSQL DB per suite (`src/lib/test/db.ts`). Coverage includes access matrix / shares, version conflict (409), owned/shared list regression against seed titles, import converters + sanitizer, and fetch helpers.
+
+## Deploy (Vercel + Turso)
+
+Do **not** use `file:` on Vercel — serverless filesystem is ephemeral. Use Turso.
+
+1. Create a Turso DB and token (`turso db create`, `turso db show --url`, `turso db tokens create`).
+2. Migrate + seed against Turso from your machine:
+
+```bash
+DATABASE_URL="libsql://YOUR-DB.turso.io" DATABASE_AUTH_TOKEN="YOUR_TOKEN" npm run db:migrate
+DATABASE_URL="libsql://YOUR-DB.turso.io" DATABASE_AUTH_TOKEN="YOUR_TOKEN" npm run db:seed
+```
+
+(PowerShell: set `$env:DATABASE_URL` / `$env:DATABASE_AUTH_TOKEN`, then run the same npm scripts.)
+
+3. Import the GitHub repo into Vercel. Set Production env: `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `SESSION_SECRET`.
+4. Deploy, open the **production** URL in an incognito window, sign in with a demo account.
+
 ## Near-real-time updates
 
-Document lists and open-document access refresh via short polling (about every 15 seconds while the tab is visible) and when the tab regains focus — not websockets. A plain browser refresh also shows newly shared docs. True real-time co-editing / presence is intentionally out of scope.
+Lists and open-doc access refresh via short polling (~15s while visible) and on tab focus — not websockets. Refresh also shows newly shared docs. True co-editing / presence is out of scope.
 
 ## Stack
 
-Next.js App Router, TypeScript, Tailwind, shadcn/ui, TipTap, libSQL + Drizzle, zod, bcryptjs + jose, sanitize-html, marked (.md import), mammoth (.docx import).
+Next.js App Router, TypeScript, Tailwind, shadcn/ui, TipTap, libSQL + Drizzle, zod, bcryptjs + jose, sanitize-html, marked, mammoth, Vitest.
 
-## File import
+## Known limitations
 
-Dashboard **Import file** accepts `.txt`, `.md`, and `.docx` up to **2 MB**. The upload becomes a new document owned by you; HTML is sanitized server-side.
-
-## What the tests cover
-
-Vitest runs against an isolated temp libSQL database per test (see `src/lib/test/db.ts`). Coverage includes:
-
-- Document list isolation and seed-title owned/shared regression (Alice / Bob / Carol)
-- Access matrix and share add/update/revoke behavior
-- File import converters (txt / md / docx), sanitizer stripping of scripts/`onerror`, and 400/413/415 validation
-- `noStoreFetch` helper used by polling clients
+- No real-time co-editing, presence, comments, version history, or attachments.
+- No public link sharing / invite of non-registered users / email notifications / sign-up.
+- No folders, search, offline mode, or Markdown/PDF export.
+- Preview/production URLs can rotate; prefer the stable Vercel production domain if Deployment Protection blocks preview links.

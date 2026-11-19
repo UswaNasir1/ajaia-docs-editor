@@ -1,5 +1,3 @@
-"use client";
-
 import { Check } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { LoginForm } from "./login-form";
@@ -10,10 +8,10 @@ const FEATURES = [
   "Share with viewer or editor access",
 ] as const;
 
+/** Server component shell — only LoginForm hydrates on the client. */
 export function LoginScreen() {
   return (
     <main className="grid min-h-full flex-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-      {/* Brand panel */}
       <aside className="relative flex flex-col overflow-hidden bg-gradient-to-br from-[#4F46E5] to-[#7C3AED] px-6 py-6 text-white lg:px-10 lg:py-10">
         <div
           aria-hidden
@@ -62,7 +60,6 @@ export function LoginScreen() {
         </p>
       </aside>
 
-      {/* Sign-in panel */}
       <section className="flex items-center justify-center bg-[#FAFAFA] px-4 py-10 sm:px-6 lg:px-8">
         <LoginForm />
       </section>
