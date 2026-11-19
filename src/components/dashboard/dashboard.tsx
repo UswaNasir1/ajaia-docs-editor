@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { ImportDialog } from "@/components/dashboard/import-dialog";
 import { SessionChangedDialog } from "@/components/session-changed-dialog";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +66,7 @@ export function Dashboard({
   const [sessionChangedName, setSessionChangedName] = useState<string | null>(
     null,
   );
+  const [importOpen, setImportOpen] = useState(false);
   const pollingEnabledRef = useRef(true);
   const requestIdRef = useRef(0);
 
@@ -317,6 +319,15 @@ export function Dashboard({
         </div>
         <div className="flex items-center gap-2">
           <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            disabled={!!sessionChangedName}
+            aria-label="Import file"
+          >
+            <Upload className="size-4" />
+            Import file
+          </Button>
+          <Button
             onClick={() => void createDocument()}
             disabled={creating || !!sessionChangedName}
             aria-label="New document"
@@ -345,6 +356,8 @@ export function Dashboard({
         open={!!sessionChangedName}
         signedInAsName={sessionChangedName ?? ""}
       />
+
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
 
       <Dialog
         open={!!renameDoc}

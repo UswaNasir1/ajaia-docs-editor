@@ -49,4 +49,8 @@ Document lists and open-document access refresh via short polling (about every 1
 
 ## Stack
 
-Next.js App Router, TypeScript, Tailwind, shadcn/ui, TipTap, libSQL + Drizzle, zod, bcryptjs + jose, sanitize-html.
+Next.js App Router, TypeScript, Tailwind, shadcn/ui, TipTap, libSQL + Drizzle, zod, bcryptjs + jose, sanitize-html, marked (.md import), mammoth (.docx import).
+
+## File import
+
+Dashboard **Import file** accepts `.txt`, `.md`, and `.docx` up to **2 MB**. The upload becomes a new document owned by you; HTML is sanitized server-side.
