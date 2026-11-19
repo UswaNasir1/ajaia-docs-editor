@@ -7,6 +7,8 @@ import {
 } from "@/lib/services/documents";
 import { updateDocumentSchema } from "@/lib/validation/documents";
 
+export const dynamic = "force-dynamic";
+
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -20,7 +22,14 @@ export async function GET(_request: Request, context: RouteContext) {
   if (!doc) {
     return errorResponse("NOT_FOUND", "Document not found");
   }
-  return Response.json({ document: doc });
+  return Response.json(
+    { document: doc },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }
 
 export async function PATCH(request: Request, context: RouteContext) {

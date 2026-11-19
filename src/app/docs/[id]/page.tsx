@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getDocument } from "@/lib/services/documents";
 
 export const instant = false;
+export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ id: string }>;

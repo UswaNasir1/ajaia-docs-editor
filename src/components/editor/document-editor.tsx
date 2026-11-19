@@ -10,6 +10,8 @@ import { ShareDialog } from "@/components/editor/share-dialog";
 import { EditorToolbar } from "@/components/editor/toolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useVisibilityPolling } from "@/hooks/use-visibility-polling";
+import { noStoreFetch } from "@/lib/fetch";
 import type { DocumentDetail } from "@/lib/services/documents";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -20,8 +22,9 @@ type DocumentEditorProps = {
 
 export function DocumentEditor({ initial }: DocumentEditorProps) {
   const router = useRouter();
-  const isOwner = initial.role === "owner";
-  const canEdit = initial.role === "owner" || initial.role === "editor";
+  const [role, setRole] = useState(initial.role);
+  const isOwner = role === "owner";
+  const canEdit = role === "owner" || role === "editor";
   const [title, setTitle] = useState(initial.title);
   const [savedTitle, setSavedTitle] = useState(initial.title);
   const [version, setVersion] = useState(initial.version);
@@ -32,6 +35,8 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
   const versionRef = useRef(version);
   const dirtyRef = useRef(false);
   const titleRef = useRef(title);
+  const canEditRef = useRef(canEdit);
+  const roleRef = useRef(role);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
   const persistRef = useRef<
@@ -50,15 +55,66 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
     titleRef.current = title;
   }, [title]);
 
+  useEffect(() => {
+    canEditRef.current = canEdit;
+  }, [canEdit]);
+
+  useEffect(() => {
+    roleRef.current = role;
+  }, [role]);
+
+  const handleAccessLost = useCallback(
+    (message?: string) => {
+      dirtyRef.current = false;
+      setDirty(false);
+      toast.error(message ?? "You no longer have access to this document");
+      router.replace("/");
+    },
+    [router],
+  );
+
+  const checkAccess = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/documents/${initial.id}`, noStoreFetch);
+      if (res.status === 403 || res.status === 404) {
+        const data = (await res.json()) as { error?: { message?: string } };
+        handleAccessLost(data.error?.message);
+        return;
+      }
+      if (!res.ok) return;
+      const data = (await res.json()) as { document?: DocumentDetail };
+      if (!data.document) return;
+
+      const nextRole = data.document.role;
+      if (nextRole !== roleRef.current) {
+        setRole(nextRole);
+        const nextCanEdit = nextRole === "owner" || nextRole === "editor";
+        if (!nextCanEdit && dirtyRef.current) {
+          dirtyRef.current = false;
+          setDirty(false);
+          if (saveTimer.current) clearTimeout(saveTimer.current);
+          toast.message("Your access is now view only");
+        } else if (nextCanEdit && roleRef.current === "viewer") {
+          toast.message("You can edit this document now");
+        }
+      }
+    } catch {
+      // Quiet background check — ignore transient network errors.
+    }
+  }, [handleAccessLost, initial.id]);
+
+  useVisibilityPolling(checkAccess);
+
   const persist = useCallback(
     async (payload: { title?: string; contentHtml?: string }) => {
-      if (!canEdit || conflict || savingRef.current) return;
+      if (!canEditRef.current || conflict || savingRef.current) return;
       savingRef.current = true;
       setSaveStatus("saving");
       try {
         const res = await fetch(`/api/documents/${initial.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
+          ...noStoreFetch,
           body: JSON.stringify({
             ...payload,
             baseVersion: versionRef.current,
@@ -79,13 +135,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
         }
 
         if (res.status === 403 || res.status === 404) {
-          dirtyRef.current = false;
-          setDirty(false);
-          toast.error(
-            data.error?.message ??
-              "You no longer have access to this document",
-          );
-          router.replace("/");
+          handleAccessLost(data.error?.message);
           return;
         }
 
@@ -117,7 +167,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
         savingRef.current = false;
       }
     },
-    [canEdit, conflict, initial.id, router],
+    [conflict, handleAccessLost, initial.id],
   );
 
   useEffect(() => {
@@ -126,7 +176,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
 
   const scheduleContentSave = useCallback(
     (html: string) => {
-      if (!canEdit || conflict) return;
+      if (!canEditRef.current || conflict) return;
       dirtyRef.current = true;
       setDirty(true);
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -134,7 +184,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
         void persist({ contentHtml: html });
       }, 800);
     },
-    [canEdit, conflict, persist],
+    [conflict, persist],
   );
 
   const editor = useEditor({
@@ -156,7 +206,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
       scheduleContentSave(ed.getHTML());
     },
     onBlur: ({ editor: ed }) => {
-      if (!canEdit || conflict) return;
+      if (!canEditRef.current || conflict) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       if (dirtyRef.current) {
         void persist({ contentHtml: ed.getHTML() });
@@ -187,7 +237,7 @@ export function DocumentEditor({ initial }: DocumentEditorProps) {
   }, []);
 
   async function commitTitle() {
-    if (!canEdit || conflict) return;
+    if (!canEditRef.current || conflict) return;
     const next = titleRef.current.trim();
     if (!next || next === savedTitle) {
       setTitle(savedTitle);

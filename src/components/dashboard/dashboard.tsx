@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useVisibilityPolling } from "@/hooks/use-visibility-polling";
+import { noStoreFetch } from "@/lib/fetch";
 import { formatRelativeTime } from "@/lib/format";
 import type { DocSummary } from "@/lib/services/documents";
 
@@ -55,11 +57,11 @@ export function Dashboard({
   const [deleteDoc, setDeleteDoc] = useState<DocSummary | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
     try {
-      const res = await fetch("/api/documents");
+      const res = await fetch("/api/documents", noStoreFetch);
       if (!res.ok) {
-        toast.error("Failed to load documents");
+        if (!opts?.quiet) toast.error("Failed to load documents");
         return;
       }
       const data = (await res.json()) as {
@@ -69,9 +71,15 @@ export function Dashboard({
       setOwned(data.owned);
       setShared(data.shared);
     } catch {
-      toast.error("Network error loading documents");
+      if (!opts?.quiet) toast.error("Network error loading documents");
     }
   }, []);
+
+  const quietRefresh = useCallback(() => {
+    void load({ quiet: true });
+  }, [load]);
+
+  useVisibilityPolling(quietRefresh);
 
   async function createDocument() {
     setCreating(true);
@@ -106,7 +114,10 @@ export function Dashboard({
     }
     setBusyId(renameDoc.id);
     try {
-      const current = await fetch(`/api/documents/${renameDoc.id}`);
+      const current = await fetch(
+        `/api/documents/${renameDoc.id}`,
+        noStoreFetch,
+      );
       const currentData = (await current.json()) as {
         document?: { version: number };
         error?: { message?: string };

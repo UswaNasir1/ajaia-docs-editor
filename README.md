@@ -43,6 +43,10 @@ Password for all: `demo1234`
 | `npm run lint` | ESLint |
 | `npm run build` / `start` | Production build and server |
 
+## Near-real-time updates
+
+Document lists and open-document access refresh via short polling (about every 15 seconds while the tab is visible) and when the tab regains focus — not websockets. A plain browser refresh also shows newly shared docs. True real-time co-editing / presence is intentionally out of scope.
+
 ## Stack
 
 Next.js App Router, TypeScript, Tailwind, shadcn/ui, TipTap, libSQL + Drizzle, zod, bcryptjs + jose, sanitize-html.

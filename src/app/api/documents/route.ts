@@ -3,6 +3,8 @@ import { AppError, appErrorResponse, errorResponse } from "@/lib/errors";
 import { createDocument, listDocuments } from "@/lib/services/documents";
 import { createDocumentSchema } from "@/lib/validation/documents";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const user = await getSessionUser();
   if (!user) {
@@ -10,7 +12,11 @@ export async function GET() {
   }
 
   const docs = await listDocuments(user.id);
-  return Response.json(docs);
+  return Response.json(docs, {
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
 }
 
 export async function POST(request: Request) {
