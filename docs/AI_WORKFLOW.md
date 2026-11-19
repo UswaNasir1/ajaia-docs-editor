@@ -1,7 +1,5 @@
 # AI workflow
 
-Source of truth for reject/change moments: `docs/AI_LOG.md` (reconstructed from the build sessions when a live log was not kept hour-by-hour).
-
 ## Tools
 - **Claude Sonnet 5.5** was used to plan out this whole task, it helped make architectural decisions.
 - **Cursor Agent** with `.cursor/rules/project.mdc` + phased prompts (scaffold → editor → sharing → import → hardening → UI → docs)

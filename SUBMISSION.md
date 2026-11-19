@@ -8,7 +8,6 @@
 | `drizzle/` | SQL migrations |
 | `docs/ARCHITECTURE.md` | Architecture note |
 | `docs/AI_WORKFLOW.md` | AI workflow note |
-| `docs/AI_LOG.md` | Reject/change log backing the workflow note |
 | `README.md` | Setup, accounts, scripts, deploy notes |
 | `SUBMISSION.md` | This file |
 | `VIDEO_URL.txt` | Walkthrough video link |
@@ -53,7 +52,6 @@ https://drive.google.com/file/d/18QruEqMq8zOKwF_OkX5Waduj09ZcoW68/view?usp=shari
 ### Incomplete or partial
 
 - Screenshots folder may be empty until captured for Drive
-- `docs/AI_LOG.md` / `AI_WORKFLOW.md` reconstructed at the end (not appended hour-by-hour while coding)
 - No e2e (Playwright) in CI; no real-time co-editing
 - Prefer stable Vercel **production** domain if this preview URL rotates or is protected
 
