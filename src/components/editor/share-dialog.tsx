@@ -1,7 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
+import { Loader2, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { Avatar } from "@/components/brand/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,9 +19,11 @@ import type { ShareCollaborator, SharesResponse } from "@/lib/services/shares";
 
 type ShareDialogProps = {
   documentId: string;
+  documentTitle: string;
 };
 
-export function ShareDialog({ documentId }: ShareDialogProps) {
+export function ShareDialog({ documentId, documentTitle }: ShareDialogProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"viewer" | "editor">("viewer");
@@ -33,6 +38,10 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
     setError(null);
     try {
       const res = await fetch(`/api/documents/${documentId}/shares`);
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
       const data = (await res.json()) as SharesResponse & {
         error?: { message?: string };
       };
@@ -47,7 +56,7 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
     } finally {
       setLoading(false);
     }
-  }, [documentId]);
+  }, [documentId, router]);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -68,6 +77,10 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), role }),
       });
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
       const data = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) {
         setError(data.error?.message ?? "Could not share document");
@@ -94,6 +107,10 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
           body: JSON.stringify({ role: nextRole }),
         },
       );
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
       const data = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) {
         toast.error(data.error?.message ?? "Could not update role");
@@ -115,6 +132,10 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
         `/api/documents/${documentId}/shares/${userId}`,
         { method: "DELETE" },
       );
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
       const data = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) {
         toast.error(data.error?.message ?? "Could not remove access");
@@ -135,31 +156,32 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
         render={
           <Button
             type="button"
-            variant="outline"
             size="sm"
             aria-label="Share document"
+            className="gap-1.5 transition-colors duration-150"
           />
         }
       >
+        <Users className="size-3.5" aria-hidden />
         Share
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share document</DialogTitle>
+          <DialogTitle>Share “{documentTitle}”</DialogTitle>
           <DialogDescription>
             Invite people by email. They must already have an account.
           </DialogDescription>
         </DialogHeader>
 
         <form
-          className="flex flex-col gap-2 sm:flex-row sm:items-end"
+          className="flex flex-col gap-2 sm:flex-row sm:items-start"
           onSubmit={(e) => {
             e.preventDefault();
             void addShare();
           }}
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <label htmlFor="share-email" className="text-sm font-medium">
+            <label htmlFor="share-email" className="sr-only">
               Email
             </label>
             <Input
@@ -170,10 +192,16 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
               placeholder="bob@ajaia.test"
               required
               disabled={busy}
+              aria-invalid={!!error}
             />
+            {error ? (
+              <p className="text-sm text-[var(--ajaia-danger)]" role="alert">
+                {error}
+              </p>
+            ) : null}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="share-role" className="text-sm font-medium">
+          <div className="flex gap-2">
+            <label htmlFor="share-role" className="sr-only">
               Role
             </label>
             <select
@@ -183,38 +211,44 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
                 setRole(e.target.value as "viewer" | "editor")
               }
               disabled={busy}
-              className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+              className="h-8 rounded-lg border border-input bg-white px-2 text-sm transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ajaia-accent)]"
               aria-label="Share role"
             >
               <option value="viewer">Viewer</option>
               <option value="editor">Editor</option>
             </select>
+            <Button
+              type="submit"
+              disabled={busy || !email.trim()}
+              className="min-w-16"
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : "Add"}
+            </Button>
           </div>
-          <Button type="submit" disabled={busy || !email.trim()}>
-            Add
-          </Button>
         </form>
 
-        {error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
+        <div className="mt-1 flex flex-col gap-2">
+          <p className="text-sm font-medium text-[var(--ajaia-ink)]">
+            People with access
           </p>
-        ) : null}
-
-        <div className="mt-2 flex flex-col gap-2">
-          <p className="text-sm font-medium">People with access</p>
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              Loading…
+            </p>
           ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border">
+            <ul className="divide-y divide-border overflow-hidden rounded-[10px] border border-border">
               {owner ? (
-                <li className="flex items-center justify-between gap-2 px-3 py-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">
-                      {owner.name}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {owner.email}
+                <li className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Avatar name={owner.name} size="sm" />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">
+                        {owner.name}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {owner.email}
+                      </div>
                     </div>
                   </div>
                   <span className="text-xs font-medium text-muted-foreground">
@@ -225,22 +259,25 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
               {shares.map((share) => (
                 <li
                   key={share.userId}
-                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
                 >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">
-                      {share.name}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {share.email}
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Avatar name={share.name} size="sm" />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">
+                        {share.name}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {share.email}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <select
                       value={share.role}
                       aria-label={`Role for ${share.name}`}
                       disabled={busy}
-                      className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs"
+                      className="h-7 rounded-md border border-input bg-white px-1.5 text-xs transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ajaia-accent)]"
                       onChange={(e) =>
                         void changeRole(
                           share.userId,
@@ -254,11 +291,12 @@ export function ShareDialog({ documentId }: ShareDialogProps) {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="icon-sm"
                       disabled={busy}
+                      aria-label={`Remove ${share.name}`}
                       onClick={() => void remove(share.userId)}
                     >
-                      Remove
+                      <Trash2 className="size-3.5 text-[var(--ajaia-danger)]" />
                     </Button>
                   </div>
                 </li>

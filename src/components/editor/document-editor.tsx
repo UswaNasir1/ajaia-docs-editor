@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { AlertTriangle, ArrowLeft, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Avatar } from "@/components/brand/avatar";
+import { Logo } from "@/components/brand/logo";
+import { RoleBadge } from "@/components/brand/role-badge";
 import { ShareDialog } from "@/components/editor/share-dialog";
 import { EditorToolbar } from "@/components/editor/toolbar";
 import { SessionChangedDialog } from "@/components/session-changed-dialog";
@@ -14,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling";
 import { noStoreFetch } from "@/lib/fetch";
 import type { DocumentDetail } from "@/lib/services/documents";
+import { cn } from "@/lib/utils";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -22,6 +27,10 @@ type DocumentEditorProps = {
   sessionUserName: string;
   initial: DocumentDetail;
 };
+
+function syncEmptyClass(ed: Editor) {
+  ed.view.dom.classList.toggle("is-editor-empty", ed.isEmpty);
+}
 
 export function DocumentEditor({
   sessionUserId,
@@ -52,8 +61,13 @@ export function DocumentEditor({
   const savingRef = useRef(false);
   const pollingEnabledRef = useRef(true);
   const requestIdRef = useRef(0);
+  const lastSavedHtmlRef = useRef(initial.contentHtml || "<p></p>");
+  const editorRef = useRef<Editor | null>(null);
   const persistRef = useRef<
-    (payload: { title?: string; contentHtml?: string }) => Promise<void>
+    (
+      payload: { title?: string; contentHtml?: string },
+      opts?: { keepalive?: boolean },
+    ) => Promise<void>
   >(async () => undefined);
 
   const stopForSessionChange = useCallback((name?: string) => {
@@ -151,7 +165,10 @@ export function DocumentEditor({
   useVisibilityPolling(checkAccess);
 
   const persist = useCallback(
-    async (payload: { title?: string; contentHtml?: string }) => {
+    async (
+      payload: { title?: string; contentHtml?: string },
+      opts?: { keepalive?: boolean },
+    ) => {
       if (
         !canEditRef.current ||
         conflict ||
@@ -160,6 +177,18 @@ export function DocumentEditor({
       ) {
         return;
       }
+
+      // Skip no-op content saves (autosave must not fire when nothing changed).
+      if (
+        payload.contentHtml !== undefined &&
+        payload.title === undefined &&
+        payload.contentHtml === lastSavedHtmlRef.current
+      ) {
+        dirtyRef.current = false;
+        setDirty(false);
+        return;
+      }
+
       savingRef.current = true;
       setSaveStatus("saving");
       try {
@@ -167,6 +196,7 @@ export function DocumentEditor({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           ...noStoreFetch,
+          keepalive: opts?.keepalive,
           body: JSON.stringify({
             ...payload,
             baseVersion: versionRef.current,
@@ -223,6 +253,9 @@ export function DocumentEditor({
           setSavedTitle(data.document.title);
           setTitle(data.document.title);
         }
+        if (payload.contentHtml !== undefined) {
+          lastSavedHtmlRef.current = payload.contentHtml;
+        }
         dirtyRef.current = false;
         setDirty(false);
         setSaveStatus("saved");
@@ -246,6 +279,12 @@ export function DocumentEditor({
   const scheduleContentSave = useCallback(
     (html: string) => {
       if (!canEditRef.current || conflict) return;
+      if (html === lastSavedHtmlRef.current) {
+        dirtyRef.current = false;
+        setDirty(false);
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        return;
+      }
       dirtyRef.current = true;
       setDirty(true);
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -260,6 +299,7 @@ export function DocumentEditor({
     immediatelyRender: false,
     editable: canEdit && !conflict,
     extensions: [
+      // Underline comes from StarterKit in TipTap v3 — do not register twice.
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
       }),
@@ -267,11 +307,15 @@ export function DocumentEditor({
     content: initial.contentHtml || "<p></p>",
     editorProps: {
       attributes: {
-        class:
-          "prose prose-neutral max-w-none min-h-[50vh] px-8 py-6 focus:outline-none",
+        class: "focus:outline-none",
+        spellcheck: "true",
       },
     },
+    onCreate: ({ editor: ed }) => {
+      syncEmptyClass(ed);
+    },
     onUpdate: ({ editor: ed }) => {
+      syncEmptyClass(ed);
       scheduleContentSave(ed.getHTML());
     },
     onBlur: ({ editor: ed }) => {
@@ -284,24 +328,41 @@ export function DocumentEditor({
   });
 
   useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  useEffect(() => {
     if (!editor) return;
     editor.setEditable(canEdit && !conflict);
   }, [editor, canEdit, conflict]);
 
   useEffect(() => {
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirtyRef.current) {
-        e.preventDefault();
-        e.returnValue = "";
+    function flushPending(keepalive: boolean) {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
       }
+      const ed = editorRef.current;
+      if (!ed || !dirtyRef.current || !canEditRef.current) return;
+      const html = ed.getHTML();
+      if (html === lastSavedHtmlRef.current) {
+        dirtyRef.current = false;
+        return;
+      }
+      void persistRef.current({ contentHtml: html }, { keepalive });
+    }
+
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      flushPending(true);
+      e.preventDefault();
+      e.returnValue = "";
     };
     window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
-
-  useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      // Client-side navigation away from the editor.
+      flushPending(true);
     };
   }, []);
 
@@ -320,35 +381,66 @@ export function DocumentEditor({
     await persist({ title: next });
   }
 
-  function statusLabel() {
-    if (conflict) return "Conflict";
-    if (saveStatus === "saving") return "Saving…";
-    if (saveStatus === "saved") return "Saved";
-    if (saveStatus === "error") return "Offline/Failed to save — retrying";
-    return dirty ? "Unsaved changes" : "Saved";
-  }
+  const roleLabel =
+    role === "editor" ? "Editor" : role === "viewer" ? "Viewer" : null;
+
+  const savePill =
+    conflict ? (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ajaia-amber-soft)] px-2.5 py-1 text-xs font-medium text-[var(--ajaia-amber)]"
+        aria-live="polite"
+      >
+        Conflict
+      </span>
+    ) : saveStatus === "saving" ? (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ajaia-page)] px-2.5 py-1 text-xs font-medium text-[var(--ajaia-muted)]"
+        aria-live="polite"
+      >
+        <Loader2 className="size-3.5 animate-spin" aria-hidden />
+        Saving…
+      </span>
+    ) : saveStatus === "error" ? (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ajaia-danger-soft)] px-2.5 py-1 text-xs font-medium text-[var(--ajaia-danger)]"
+        aria-live="polite"
+      >
+        Failed to save — retrying
+      </span>
+    ) : (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ajaia-success-soft)] px-2.5 py-1 text-xs font-medium text-[var(--ajaia-success)]"
+        aria-live="polite"
+      >
+        <Check className="size-3.5" aria-hidden />
+        {dirty ? "Unsaved changes" : "Saved"}
+      </span>
+    );
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-[linear-gradient(180deg,#f6f4ef_0%,#faf9f7_40%,#ffffff_100%)]">
+    <div className="flex min-h-full flex-1 flex-col bg-[var(--ajaia-page)]">
       <SessionChangedDialog
         open={!!sessionChangedName}
         signedInAsName={sessionChangedName ?? sessionUserName}
       />
-      <header className="sticky top-0 z-10 border-b border-border/70 bg-background/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-4xl items-center gap-3 px-4 py-3">
+      <header className="sticky top-0 z-20 border-b border-[#E5E7EB] bg-white/90 backdrop-blur-md">
+        <div className="flex h-14 items-center gap-2 px-3 sm:h-16 sm:gap-3 sm:px-4">
           <Link
             href="/"
             aria-label="Back to dashboard"
-            className="inline-flex h-7 items-center rounded-lg px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="inline-flex size-8 items-center justify-center rounded-[10px] text-[var(--ajaia-muted)] transition-colors duration-150 hover:bg-[var(--ajaia-page)] hover:text-[var(--ajaia-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ajaia-accent)]"
           >
-            ← Docs
+            <ArrowLeft className="size-4" aria-hidden />
           </Link>
+          <Logo markOnly className="hidden sm:inline-flex" />
           <Input
             value={title}
             onChange={(e) => {
-              setTitle(e.target.value);
-              dirtyRef.current = true;
-              setDirty(true);
+              const next = e.target.value;
+              setTitle(next);
+              const changed = next.trim() !== savedTitle;
+              dirtyRef.current = changed;
+              setDirty(changed);
             }}
             onBlur={() => void commitTitle()}
             onKeyDown={(e) => {
@@ -363,41 +455,50 @@ export function DocumentEditor({
             }}
             disabled={!canEdit || conflict || !!sessionChangedName}
             aria-label="Document title"
-            className="h-9 flex-1 border-transparent bg-transparent text-lg font-semibold shadow-none focus-visible:border-ring focus-visible:bg-background"
+            className={cn(
+              "h-9 min-w-0 flex-1 truncate rounded-[10px] border-0 bg-transparent px-2 text-lg font-semibold text-[var(--ajaia-ink)] shadow-none transition-colors duration-150 sm:text-xl",
+              "hover:bg-[var(--ajaia-page)] focus-visible:bg-[var(--ajaia-page)] focus-visible:ring-0",
+            )}
           />
-          {isOwner ? (
-            <ShareDialog documentId={initial.id} />
-          ) : (
-            <span className="shrink-0 text-xs text-muted-foreground">
-              Owner: {initial.ownerName}
-            </span>
-          )}
-          <span
-            className="shrink-0 text-xs text-muted-foreground"
-            aria-live="polite"
-          >
-            {statusLabel()}
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {savePill}
+            {isOwner ? (
+              <ShareDialog documentId={initial.id} documentTitle={savedTitle} />
+            ) : roleLabel === "Editor" || roleLabel === "Viewer" ? (
+              <span className="hidden items-center gap-1.5 sm:inline-flex">
+                <RoleBadge
+                  role={roleLabel === "Editor" ? "editor" : "viewer"}
+                />
+                <span className="text-xs text-[var(--ajaia-muted)]">
+                  · {initial.ownerName}
+                </span>
+              </span>
+            ) : null}
+            <Avatar name={sessionUserName} size="sm" />
+          </div>
         </div>
-        {canEdit && !conflict && !sessionChangedName ? (
-          <EditorToolbar editor={editor} />
-        ) : null}
       </header>
+
+      {canEdit && !conflict && !sessionChangedName ? (
+        <EditorToolbar editor={editor} />
+      ) : null}
 
       {!canEdit ? (
         <div
-          className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
+          className="flex items-center justify-center gap-2 border-b border-[var(--ajaia-amber-border)] bg-[var(--ajaia-amber-soft)] px-4 py-2 text-sm text-[var(--ajaia-amber)]"
           role="status"
         >
+          <AlertTriangle className="size-4 shrink-0" aria-hidden />
           View only — you can read this document but not edit it.
         </div>
       ) : null}
 
       {conflict ? (
         <div
-          className="flex flex-wrap items-center justify-center gap-3 border-b border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-950"
+          className="flex flex-wrap items-center justify-center gap-3 border-b border-[var(--ajaia-amber-border)] bg-[var(--ajaia-amber-soft)] px-4 py-2.5 text-sm text-[var(--ajaia-amber)]"
           role="alert"
         >
+          <AlertTriangle className="size-4 shrink-0" aria-hidden />
           <span>
             This document was updated by someone else. Reload to get the latest
             version.
@@ -405,6 +506,7 @@ export function DocumentEditor({
           <Button
             size="sm"
             variant="outline"
+            className="border-[var(--ajaia-amber-border)] bg-white"
             onClick={() => {
               router.refresh();
               window.location.reload();
@@ -415,8 +517,14 @@ export function DocumentEditor({
         </div>
       ) : null}
 
-      <div className="mx-auto w-full max-w-4xl flex-1 px-2 py-6 sm:px-4">
-        <div className="min-h-[70vh] rounded-sm border border-border/60 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="mx-auto w-full max-w-[816px] flex-1 px-3 pb-10 pt-6 sm:px-4 sm:pt-8">
+        <div
+          className={cn(
+            "ajaia-editor min-h-[1056px] rounded-sm border border-border bg-white shadow-[var(--ajaia-paper-shadow)]",
+            "px-12 py-12 sm:px-[72px] sm:py-[72px]",
+            (!canEdit || conflict) && "is-readonly",
+          )}
+        >
           <EditorContent editor={editor} />
         </div>
       </div>

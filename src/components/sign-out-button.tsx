@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { publishAuthUser } from "@/lib/auth/session-sync";
 
 export function SignOutButton() {
   const router = useRouter();
@@ -19,7 +18,6 @@ export function SignOutButton() {
         setPending(true);
         try {
           await fetch("/api/auth/logout", { method: "POST" });
-          publishAuthUser(null);
           router.replace("/login");
           router.refresh();
         } finally {

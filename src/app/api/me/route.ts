@@ -1,10 +1,14 @@
 import { getSessionUser } from "@/lib/auth/session";
-import { errorResponse } from "@/lib/errors";
+import { errorResponse, internalErrorResponse } from "@/lib/errors";
 
 export async function GET() {
-  const user = await getSessionUser();
-  if (!user) {
-    return errorResponse("UNAUTHORIZED", "Not signed in");
+  try {
+    const user = await getSessionUser();
+    if (!user) {
+      return errorResponse("UNAUTHORIZED", "Not signed in");
+    }
+    return Response.json({ user });
+  } catch {
+    return internalErrorResponse();
   }
-  return Response.json({ user });
 }

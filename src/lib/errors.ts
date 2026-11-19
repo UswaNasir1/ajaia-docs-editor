@@ -44,3 +44,8 @@ export function errorResponse(
 export function appErrorResponse(err: AppError) {
   return errorResponse(err.code, err.message, { body: err.extra });
 }
+
+/** Catch-all for unexpected route failures — never leak stacks to clients. */
+export function internalErrorResponse() {
+  return errorResponse("INTERNAL", "Something went wrong");
+}

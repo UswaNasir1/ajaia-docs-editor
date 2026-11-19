@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/session";
-import { LoginForm } from "./login-form";
+import { LoginScreen } from "./login-screen";
 
 export const instant = false;
+
+export const metadata: Metadata = {
+  title: "Sign in",
+};
 
 export default async function LoginPage() {
   const user = await getSessionUser();
@@ -10,15 +15,5 @@ export default async function LoginPage() {
     redirect("/");
   }
 
-  return (
-    <main className="flex flex-1 flex-col items-center justify-center px-4 py-16">
-      <div className="mb-8 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Ajaia Docs</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Sign in to open your collaborative documents
-        </p>
-      </div>
-      <LoginForm />
-    </main>
-  );
+  return <LoginScreen />;
 }
